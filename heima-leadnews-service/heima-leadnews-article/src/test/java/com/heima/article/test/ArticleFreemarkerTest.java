@@ -6,12 +6,14 @@ import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.heima.article.ArticleApplication;
 import com.heima.article.mapper.ApArticleContentMapper;
 import com.heima.article.mapper.ApArticleMapper;
+import com.heima.article.service.ApArticleService;
 import com.heima.file.service.FileStorageService;
 import com.heima.model.article.pojos.ApArticle;
 import com.heima.model.article.pojos.ApArticleContent;
 import freemarker.template.Configuration;
 import freemarker.template.Template;
 import org.apache.commons.lang3.StringUtils;
+import org.checkerframework.checker.units.qual.A;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -29,35 +31,43 @@ import java.util.Map;
 public class ArticleFreemarkerTest {
 
     @Autowired
+    private ApArticleContentMapper apArticleContentMapper;
+    @Autowired
     private Configuration configuration;
-
     @Autowired
     private FileStorageService fileStorageService;
-
-
+    @Autowired
+    private ApArticleService apArticleService;
     @Autowired
     private ApArticleMapper apArticleMapper;
 
-    @Autowired
-    private ApArticleContentMapper apArticleContentMapper;
-
     @Test
     public void createStaticUrlTest() throws Exception {
+
+        //已知文章id
         //1.获取文章内容
-        ApArticleContent apArticleContent = apArticleContentMapper.selectOne(Wrappers.<ApArticleContent>lambdaQuery().eq(ApArticleContent::getArticleId, 1404705243362627586L));
-        if(apArticleContent != null && StringUtils.isNotBlank(apArticleContent.getContent())){
+        ApArticleContent apArticleContent = apArticleContentMapper
+                .selectOne(Wrappers.<ApArticleContent>lambdaQuery()
+                        .eq(ApArticleContent::getArticleId, "1383827995813531650L"));
+
+        if (apArticleContent != null && StringUtils.isNotBlank(apArticleContent.getContent())) {
             //2.文章内容通过freemarker生成html文件
-            StringWriter out = new StringWriter();
             Template template = configuration.getTemplate("article.ftl");
 
-            Map<String, Object> params = new HashMap<>();
-            params.put("content", JSONArray.parseArray(apArticleContent.getContent()));
+            //數據模型
+            Map<String, Object> content = new HashMap<>();
+            content.put("content", JSONArray.parseArray(apArticleContent.getContent()));
 
-            template.process(params, out);
-            InputStream is = new ByteArrayInputStream(out.toString().getBytes());
+            StringWriter out = new StringWriter();
+
+            //合成
+            template.process(content, out);
 
             //3.把html文件上传到minio中
-            String path = fileStorageService.uploadHtmlFile("", apArticleContent.getArticleId() + ".html", is);
+            InputStream in = new ByteArrayInputStream(out.toString().getBytes());
+            String path = fileStorageService
+                    .uploadHtmlFile("", apArticleContent.getArticleId() + ".html", in);
+            System.out.println(path);
 
             //4.修改ap_article表，保存static_url字段
             ApArticle article = new ApArticle();
@@ -66,5 +76,7 @@ public class ArticleFreemarkerTest {
             apArticleMapper.updateById(article);
 
         }
+
+
     }
 }
